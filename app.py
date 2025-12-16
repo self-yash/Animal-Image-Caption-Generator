@@ -44,15 +44,18 @@ def predict():
         return jsonify({"error": "No image uploaded"}), 400
 
     file = request.files["image"]
+
     image = Image.open(file.stream).convert("RGB")
     image = image.resize((384, 384))  # memory safe
 
+    inputs = processor(image, return_tensors="pt")
+
     with torch.no_grad():
-        inputs = processor(image, return_tensors="pt")
         output = model.generate(**inputs, max_length=50)
 
     caption = processor.decode(output[0], skip_special_tokens=True)
     return jsonify({"caption": caption})
+
 
 @app.route("/translate", methods=["POST"])
 def translate():
