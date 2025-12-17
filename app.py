@@ -1,3 +1,4 @@
+from email.mime import image
 from flask import Flask, request, jsonify, render_template
 import os
 from PIL import Image
@@ -14,6 +15,8 @@ torch.set_num_threads(1)
 logging.basicConfig(level=logging.INFO)
 
 HF_TOKEN = os.getenv("HF_TOKEN")
+if not HF_TOKEN:
+    raise RuntimeError("HF_TOKEN environment variable not set")
 
 processor = BlipProcessor.from_pretrained(
     "Salesforce/blip-image-captioning-small",
@@ -24,7 +27,7 @@ model = BlipForConditionalGeneration.from_pretrained(
     "Salesforce/blip-image-captioning-small",
     token=HF_TOKEN
 )
-
+model.to(device)
 model.eval()
 
 def translate_with_mymemory(text, target_lang):
@@ -53,8 +56,9 @@ def predict():
 
     image = Image.open(file.stream).convert("RGB")
     image = image.resize((384, 384))  # memory safe
-
+    
     inputs = processor(image, return_tensors="pt")
+    inputs = {k: v.to(device) for k, v in inputs.items()}
 
     with torch.no_grad():
         output = model.generate(**inputs, max_length=50)
