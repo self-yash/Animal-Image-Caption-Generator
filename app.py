@@ -10,15 +10,21 @@ app = Flask(__name__, template_folder='templates')
 
 device = "cpu"
 torch.set_grad_enabled(False)
+torch.set_num_threads(1)
 logging.basicConfig(level=logging.INFO)
 
-# ✅ SMALL model (fits 512MB)
+HF_TOKEN = os.getenv("HF_TOKEN")
+
 processor = BlipProcessor.from_pretrained(
-    "Salesforce/blip-image-captioning-small"
+    "Salesforce/blip-image-captioning-small",
+    token=HF_TOKEN
 )
+
 model = BlipForConditionalGeneration.from_pretrained(
-    "Salesforce/blip-image-captioning-small"
+    "Salesforce/blip-image-captioning-small",
+    token=HF_TOKEN
 )
+
 model.eval()
 
 def translate_with_mymemory(text, target_lang):
