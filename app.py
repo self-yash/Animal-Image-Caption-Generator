@@ -44,7 +44,7 @@ def predict():
     inputs = processor(image, return_tensors="pt")
 
     with torch.no_grad():
-        output = model.generate(**inputs, max_length=40)
+        output = model.generate(**inputs, max_length=25)
 
     caption = processor.decode(output[0], skip_special_tokens=True)
     return jsonify({"caption": caption})
@@ -64,6 +64,11 @@ def translate():
         return jsonify({"translatedText": r.json()["responseData"]["translatedText"]})
     except:
         return jsonify({"error": "Translation failed"}), 500
+
+@app.route("/health")
+def health():
+    return {"status": "ok", "model_loaded": model is not None}
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
