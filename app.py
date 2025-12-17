@@ -1,4 +1,3 @@
-from email.mime import image
 from flask import Flask, request, jsonify, render_template
 import os
 from PIL import Image
@@ -7,41 +6,26 @@ from transformers import BlipProcessor, BlipForConditionalGeneration
 import requests
 import logging
 
-app = Flask(__name__, template_folder='templates')
+app = Flask(__name__, template_folder="templates")
 
-device = "cpu"
 torch.set_grad_enabled(False)
-torch.set_num_threads(1)
 logging.basicConfig(level=logging.INFO)
 
-HF_TOKEN = os.getenv("HF_TOKEN")
-if not HF_TOKEN:
-    raise RuntimeError("HF_TOKEN environment variable not set")
+processor = None
+model = None
 
-processor = BlipProcessor.from_pretrained(
-    "Salesforce/blip-image-captioning-small",
-    token=HF_TOKEN
-)
-
-model = BlipForConditionalGeneration.from_pretrained(
-    "Salesforce/blip-image-captioning-small",
-    token=HF_TOKEN
-)
-model.to(device)
-model.eval()
-
-def translate_with_mymemory(text, target_lang):
-    try:
-        url = "https://api.mymemory.translated.net/get"
-        langpair = f"en|{target_lang.split('-')[0]}"
-        r = requests.get(url, params={"q": text, "langpair": langpair}, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        if data.get("responseStatus") == 200:
-            return data["responseData"]["translatedText"]
-    except Exception as e:
-        logging.warning("MyMemory failed: %s", e)
-    return None
+def load_model():
+    global processor, model
+    if model is None:
+        logging.info("Loading BLIP model...")
+        processor = BlipProcessor.from_pretrained(
+            "Salesforce/blip-image-captioning-base"
+        )
+        model = BlipForConditionalGeneration.from_pretrained(
+            "Salesforce/blip-image-captioning-base"
+        )
+        model.eval()
+        logging.info("BLIP model loaded")
 
 @app.route("/")
 def index():
@@ -49,23 +33,21 @@ def index():
 
 @app.route("/predict", methods=["POST"])
 def predict():
+    load_model()  # ✅ lazy load
+
     if "image" not in request.files:
         return jsonify({"error": "No image uploaded"}), 400
 
-    file = request.files["image"]
+    image = Image.open(request.files["image"].stream).convert("RGB")
+    image = image.resize((384, 384))
 
-    image = Image.open(file.stream).convert("RGB")
-    image = image.resize((384, 384))  # memory safe
-    
     inputs = processor(image, return_tensors="pt")
-    inputs = {k: v.to(device) for k, v in inputs.items()}
 
     with torch.no_grad():
-        output = model.generate(**inputs, max_length=50)
+        output = model.generate(**inputs, max_length=40)
 
     caption = processor.decode(output[0], skip_special_tokens=True)
     return jsonify({"caption": caption})
-
 
 @app.route("/translate", methods=["POST"])
 def translate():
@@ -73,11 +55,15 @@ def translate():
     text = data.get("text")
     target = data.get("target")
 
-    translated = translate_with_mymemory(text, target)
-    if translated:
-        return jsonify({"translatedText": translated})
-
-    return jsonify({"error": "Translation failed"}), 500
+    try:
+        r = requests.get(
+            "https://api.mymemory.translated.net/get",
+            params={"q": text, "langpair": f"en|{target.split('-')[0]}"},
+            timeout=10
+        )
+        return jsonify({"translatedText": r.json()["responseData"]["translatedText"]})
+    except:
+        return jsonify({"error": "Translation failed"}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
