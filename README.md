@@ -54,6 +54,6 @@ The BLIP model is provided by **Salesforce** and is subject to its own license.
 
 ## 🙌 Acknowledgements
 
-- [Salesforce BLIP](https://huggingface.co/Salesforce/blip-image-captioning-small)
+- [Salesforce BLIP](https://huggingface.co/Salesforce/blip-image-captioning-base)
 - Hugging Face Transformers
 - PyTorch
